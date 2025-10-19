@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:travel_buddy/add_trip.dart';
 import 'signup_page.dart';
 
 void main() {
@@ -13,7 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: "Flutter Auth App",
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: SignUpPage(),
+      home: AddTripPage(),
       debugShowCheckedModeBanner: false,
     );
   }
