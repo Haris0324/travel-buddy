@@ -20,19 +20,32 @@ class _AddTripPageState extends State<AddTripPage> {
 
   String? _selectedTripType;
 
-  Future<void> _pickDate(TextEditingController controller) async {
+  Future<void> _pickDate(TextEditingController controller, {bool isStart = false}) async {
+    final DateTime now = DateTime.now();
+    DateTime firstDate = now;
+    DateTime? initialDate = now;
+
+    // If selecting end date, make sure it starts after selected start date
+    if (!isStart && _startDateController.text.isNotEmpty) {
+      final startDate = DateFormat('dd/MM/yyyy').parse(_startDateController.text);
+      firstDate = startDate.add(const Duration(days: 1));
+      initialDate = firstDate;
+    }
+
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2025),
+      initialDate: initialDate!,
+      firstDate: firstDate,
       lastDate: DateTime(2035),
     );
+
     if (pickedDate != null) {
       setState(() {
         controller.text = DateFormat('dd/MM/yyyy').format(pickedDate);
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -64,15 +77,26 @@ class _AddTripPageState extends State<AddTripPage> {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
                 ),
+                validator: (value) {
+                  if (value==null||value.isEmpty) {
+                    return "Enter the trip name";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
               // Destination
-              const Text("Destination *",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text("Destination *", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _destinationController,
+                validator: (value) {
+                  if (value==null||value.isEmpty) {
+                    return "Enter the destination name";
+                  }
+                  return null;
+                },
                 decoration: InputDecoration(
                   hintText: "Where are you going?",
                   prefixIcon: const Icon(Icons.location_on_outlined),
@@ -92,22 +116,34 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Start Date",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Start Date", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _startDateController,
                           readOnly: true,
-                          onTap: () => _pickDate(_startDateController),
+                          onTap: () => _pickDate(_startDateController, isStart: true),
                           decoration: InputDecoration(
                             hintText: "dd/mm/yyyy",
                             prefixIcon: const Icon(Icons.calendar_today_outlined),
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none),
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the start date";
+                            }
+
+                            final startDate = DateFormat('dd/MM/yyyy').parse(value);
+                            if (startDate.isBefore(DateTime.now())) {
+                              return "Start date cannot be before today";
+                            }
+
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -117,8 +153,7 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("End Date",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("End Date", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _endDateController,
@@ -130,9 +165,25 @@ class _AddTripPageState extends State<AddTripPage> {
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none),
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the end date";
+                            }
+
+                            if (_startDateController.text.isNotEmpty) {
+                              final startDate = DateFormat('dd/MM/yyyy').parse(_startDateController.text);
+                              final endDate = DateFormat('dd/MM/yyyy').parse(value);
+                              if (!endDate.isAfter(startDate)) {
+                                return "End date must be after the start date";
+                              }
+                            }
+
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -148,13 +199,26 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Budget",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Budget", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _budgetController,
+                          validator: (value) {
+                            if(value==null||value.isEmpty) {
+                              return "Enter the budget";
+                            }
+                            final number = int.tryParse(value);
+                            if (number == null) {
+                              return "Enter a valid number";
+                            }
+                            if (number <= 0) {
+                              return "Budget must be greater than 0";
+                            }
+                            return null;
+                          },
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
+                            errorMaxLines: 2,
                             hintText: "0",
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
@@ -171,13 +235,26 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Travelers",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Travelers", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _travelersController,
                           keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if(value==null||value.isEmpty) {
+                              return "Enter the number of travelers";
+                            }
+                            final number = int.tryParse(value);
+                            if (number == null) {
+                              return "Enter a valid number";
+                            }
+                            if (number <= 0) {
+                              return "no of travelers must be greater than 0";
+                            }
+                            return null;
+                          },
                           decoration: InputDecoration(
+                            errorMaxLines: 2,
                             hintText: "1",
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
@@ -194,8 +271,7 @@ class _AddTripPageState extends State<AddTripPage> {
               const SizedBox(height: 24),
 
               // Trip Type
-              const Text("Trip Type",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text("Trip Type", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
 
               Wrap(
@@ -217,16 +293,44 @@ class _AddTripPageState extends State<AddTripPage> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      print("Trip Created!");
+                      if (_selectedTripType == null) {
+                        // Trip type not selected
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Please select a trip type before submitting."),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                      } else {
+                        // All valid
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              "Trip created successfully! (${_selectedTripType!})",
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Fill out all the required fields."),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6A5AE0),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text("Create Trip",
-                      style: TextStyle(fontSize: 18, color: Colors.white)),
+                  child: const Text(
+                    "Create Trip",
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
                 ),
               ),
             ],
