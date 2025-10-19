@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import './widgets/bar.dart';
+import './screens/homescreen.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -15,14 +17,27 @@ class _HomepageState extends State<Homepage> {
     await FirebaseAuth.instance.signOut();
   }
 
+  int _selectedIndex = 0;
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  // screens
+  final List<Widget> _screens = const [HomeScreen()];
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Travel buddy")),
-      body: Center(child: Text('${user.email}')),
+      body: HomeScreen(),
       floatingActionButton: FloatingActionButton(
         onPressed: (() => signout()),
         child: Icon(Icons.login_rounded),
+      ),
+
+      bottomNavigationBar: BottomNavBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: _onItemTapped,
       ),
     );
   }
