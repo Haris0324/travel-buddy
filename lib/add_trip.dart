@@ -1,7 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:travel_app/data/user_trips_data.dart';
-import 'package:travel_app/models/user_trip.dart';
+
+import 'package:travel_buddy/data/user_trips_data.dart';
+import 'package:travel_buddy/models/user_trip.dart';
 
 class AddTripPage extends StatefulWidget {
   const AddTripPage({super.key});
@@ -12,7 +14,8 @@ class AddTripPage extends StatefulWidget {
 
 class _AddTripPageState extends State<AddTripPage> {
   final _formKey = GlobalKey<FormState>();
-
+  final user = FirebaseAuth.instance.currentUser;
+  String? get id => user?.uid;
   final TextEditingController _tripNameController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
@@ -259,7 +262,7 @@ class _AddTripPageState extends State<AddTripPage> {
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
                       final newUserTrip = UserTrip(
-                        userId: 'user123', // Hardcoded user ID
+                        userId: id, // Hardcoded user ID
                         tripName: _tripNameController.text,
                         destination: _destinationController.text,
                         startDate: _startDateController.text,
