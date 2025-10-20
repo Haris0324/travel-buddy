@@ -1,9 +1,8 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-import 'package:travel_buddy/data/user_trips_data.dart';
-import 'package:travel_buddy/models/user_trip.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // From File 2
+import '../data/user_trips_data.dart'; // Assuming this path is correct from File 2
+import '../models/user_trip.dart'; // Assuming this path is correct from File 2
 
 class AddTripPage extends StatefulWidget {
   const AddTripPage({super.key});
@@ -14,8 +13,11 @@ class AddTripPage extends StatefulWidget {
 
 class _AddTripPageState extends State<AddTripPage> {
   final _formKey = GlobalKey<FormState>();
+
+  // User and ID retrieval (from File 2)
   final user = FirebaseAuth.instance.currentUser;
-  String? get id => user?.uid;
+  String? get currentUserId => user?.uid;
+
   final TextEditingController _tripNameController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
@@ -25,19 +27,138 @@ class _AddTripPageState extends State<AddTripPage> {
 
   String? _selectedTripType;
 
-  Future<void> _pickDate(TextEditingController controller) async {
+  // Dispose controllers to prevent memory leaks
+  @override
+  void dispose() {
+    _tripNameController.dispose();
+    _destinationController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
+    _budgetController.dispose();
+    _travelersController.dispose();
+    super.dispose();
+  }
+
+  // Date Picker Logic (Optimized from File 1's logic)
+  Future<void> _pickDate(TextEditingController controller, {bool isStart = false}) async {
+    final DateTime now = DateTime.now();
+    DateTime firstDate = now;
+    DateTime? initialDate = now;
+
+    // Logic from File 1: Set minimum date for end date based on start date
+    if (!isStart && _startDateController.text.isNotEmpty) {
+      try {
+        final startDate = DateFormat('dd/MM/yyyy').parse(_startDateController.text);
+        firstDate = startDate.add(const Duration(days: 1));
+        initialDate = firstDate;
+      } catch (e) {
+        // If start date is invalid, fall back to today
+        firstDate = now;
+        initialDate = now;
+      }
+    }
+
+    // Adjust initialDate if it's before firstDate
+    if (initialDate!.isBefore(firstDate)) {
+      initialDate = firstDate;
+    }
+
+
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2025),
+      initialDate: initialDate,
+      firstDate: firstDate.subtract(const Duration(days: 1)), // Allow selecting today for start date
       lastDate: DateTime(2035),
     );
+
     if (pickedDate != null) {
+      // If picking start date, and it's after the current end date, clear the end date
+      if (isStart && _endDateController.text.isNotEmpty) {
+        final newStartDate = pickedDate;
+        final currentEndDate = DateFormat('dd/MM/yyyy').parse(_endDateController.text);
+        if (!currentEndDate.isAfter(newStartDate)) {
+          _endDateController.clear();
+        }
+      }
       setState(() {
         controller.text = DateFormat('dd/MM/yyyy').format(pickedDate);
       });
     }
   }
+
+  // Submission Logic (Combining validation from File 1 and data handling from File 2)
+  void _submitTrip() {
+    if (_formKey.currentState!.validate()) {
+      if (_selectedTripType == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Please select a trip type before submitting."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
+      if (currentUserId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("User not logged in. Cannot create trip."),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create new trip object (from File 2)
+      final newUserTrip = UserTrip(
+        userId: currentUserId!,
+        tripName: _tripNameController.text,
+        destination: _destinationController.text,
+        startDate: _startDateController.text,
+        endDate: _endDateController.text,
+        budget: _budgetController.text,
+        travelers: _travelersController.text,
+        tripType: _selectedTripType,
+      );
+
+      // Add to data source (from File 2)
+      userTrips.add(newUserTrip);
+
+      // Reset the form (from File 2)
+      _formKey.currentState!.reset();
+
+      // Manually clear the controllers and reset the trip type state
+      // This is necessary because reset() only works on FormFields with initialValue
+      // and for the trip type state variable.
+      _tripNameController.clear();
+      _destinationController.clear();
+      _budgetController.clear();
+      _travelersController.clear();
+      setState(() {
+        _selectedTripType = null;
+      });
+
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trip created successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Optionally navigate back after success
+      // Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Fill out all the required fields correctly."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -56,10 +177,8 @@ class _AddTripPageState extends State<AddTripPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Trip Name
-              const Text(
-                "Trip Name *",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text("Trip Name *",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _tripNameController,
@@ -68,20 +187,21 @@ class _AddTripPageState extends State<AddTripPage> {
                   filled: true,
                   fillColor: const Color(0xFFF7F7F9),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none),
                 ),
-                validator: (value) =>
-                    value!.isEmpty ? 'Please enter a trip name' : null,
+                // Validation from File 1
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Enter the trip name";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
               // Destination
-              const Text(
-                "Destination *",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text("Destination *", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _destinationController,
@@ -91,12 +211,16 @@ class _AddTripPageState extends State<AddTripPage> {
                   filled: true,
                   fillColor: const Color(0xFFF7F7F9),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none),
                 ),
-                validator: (value) =>
-                    value!.isEmpty ? 'Please enter a destination' : null,
+                // Validation from File 1
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Enter the destination name";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -107,20 +231,15 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Start Date",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        const Text("Start Date", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _startDateController,
                           readOnly: true,
-                          onTap: () => _pickDate(_startDateController),
+                          onTap: () => _pickDate(_startDateController, isStart: true),
                           decoration: InputDecoration(
                             hintText: "dd/mm/yyyy",
-                            prefixIcon: const Icon(
-                              Icons.calendar_today_outlined,
-                            ),
+                            prefixIcon: const Icon(Icons.calendar_today_outlined),
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
@@ -128,9 +247,23 @@ class _AddTripPageState extends State<AddTripPage> {
                               borderSide: BorderSide.none,
                             ),
                           ),
-                          validator: (value) => value!.isEmpty
-                              ? 'Please select a start date'
-                              : null,
+                          // Validation from File 1
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the start date";
+                            }
+                            try {
+                              final startDate = DateFormat('dd/MM/yyyy').parse(value);
+                              // Clear the time part for accurate comparison with 'now'
+                              final today = DateTime.now().subtract(const Duration(hours: 24));
+                              if (startDate.isBefore(today)) {
+                                return "Start date cannot be before today";
+                              }
+                            } catch (e) {
+                              return "Invalid Date Format";
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -140,10 +273,7 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "End Date",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        const Text("End Date", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _endDateController,
@@ -151,9 +281,7 @@ class _AddTripPageState extends State<AddTripPage> {
                           onTap: () => _pickDate(_endDateController),
                           decoration: InputDecoration(
                             hintText: "dd/mm/yyyy",
-                            prefixIcon: const Icon(
-                              Icons.calendar_today_outlined,
-                            ),
+                            prefixIcon: const Icon(Icons.calendar_today_outlined),
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
@@ -161,9 +289,25 @@ class _AddTripPageState extends State<AddTripPage> {
                               borderSide: BorderSide.none,
                             ),
                           ),
-                          validator: (value) => value!.isEmpty
-                              ? 'Please select an end date'
-                              : null,
+                          // Validation from File 1
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the end date";
+                            }
+                            if (_startDateController.text.isEmpty) {
+                              return "Select a start date first";
+                            }
+                            try {
+                              final startDate = DateFormat('dd/MM/yyyy').parse(_startDateController.text);
+                              final endDate = DateFormat('dd/MM/yyyy').parse(value);
+                              if (!endDate.isAfter(startDate)) {
+                                return "End date must be after the start date";
+                              }
+                            } catch (e) {
+                              return "Invalid Date Format";
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -179,25 +323,34 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Budget",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        const Text("Budget", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _budgetController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
+                            errorMaxLines: 2,
                             hintText: "0",
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
                           ),
-                          validator: (value) =>
-                              value!.isEmpty ? 'Please enter a budget' : null,
+                          // Validation from File 1
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the budget";
+                            }
+                            final number = int.tryParse(value);
+                            if (number == null) {
+                              return "Enter a valid number";
+                            }
+                            if (number <= 0) {
+                              return "Budget must be greater than 0";
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -207,26 +360,34 @@ class _AddTripPageState extends State<AddTripPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Travelers",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        const Text("Travelers", style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _travelersController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
+                            errorMaxLines: 2,
                             hintText: "1",
                             filled: true,
                             fillColor: const Color(0xFFF7F7F9),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
                           ),
-                          validator: (value) => value!.isEmpty
-                              ? 'Please enter the number of travelers'
-                              : null,
+                          // Validation from File 1
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "Enter the number of travelers";
+                            }
+                            final number = int.tryParse(value);
+                            if (number == null) {
+                              return "Enter a valid number";
+                            }
+                            if (number <= 0) {
+                              return "no of travelers must be greater than 0";
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     ),
@@ -236,10 +397,7 @@ class _AddTripPageState extends State<AddTripPage> {
               const SizedBox(height: 24),
 
               // Trip Type
-              const Text(
-                "Trip Type",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text("Trip Type", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
 
               Wrap(
@@ -259,30 +417,7 @@ class _AddTripPageState extends State<AddTripPage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      final newUserTrip = UserTrip(
-                        userId: id, // Hardcoded user ID
-                        tripName: _tripNameController.text,
-                        destination: _destinationController.text,
-                        startDate: _startDateController.text,
-                        endDate: _endDateController.text,
-                        budget: _budgetController.text,
-                        travelers: _travelersController.text,
-                        tripType: _selectedTripType,
-                      );
-
-                      userTrips.add(newUserTrip);
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Trip created successfully!'),
-                        ),
-                      );
-
-                      Navigator.pop(context);
-                    }
-                  },
+                  onPressed: _submitTrip, // Call the merged submission function
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6A5AE0),
                     shape: RoundedRectangleBorder(
@@ -302,6 +437,7 @@ class _AddTripPageState extends State<AddTripPage> {
     );
   }
 
+  // Trip Type Button Widget (identical in both files)
   Widget _tripTypeButton(String type, IconData icon) {
     final bool isSelected = _selectedTripType == type;
     return GestureDetector(

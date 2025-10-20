@@ -1,20 +1,22 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:travel_buddy/add_trip.dart';
-import 'signup_page.dart';
+import 'package:travel_buddy/wrapper.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(SignIn());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SignIn extends StatelessWidget {
+  const SignIn({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Flutter Auth App",
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: AddTripPage(),
+      title: "Hello",
+      theme: ThemeData(primarySwatch: Colors.indigo),
+      home: Wrapper(),
       debugShowCheckedModeBanner: false,
     );
   }
