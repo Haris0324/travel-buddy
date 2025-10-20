@@ -15,9 +15,8 @@ class SignIn extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: "Hello",
-      theme: ThemeData(primarySwatch: Colors.indigo),
-      home: Wrapper(),
       debugShowCheckedModeBanner: false,
-    );
+      home: Wrapper(),
+     );
   }
 }
