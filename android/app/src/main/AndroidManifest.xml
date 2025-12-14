@@ -3,6 +3,9 @@
         android:label="travel_buddy"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyCMT0HYZDrLb_IjVOeQ_pB6rX5e3a6CEBg"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

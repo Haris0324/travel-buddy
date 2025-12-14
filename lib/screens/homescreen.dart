@@ -2,7 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../data/explore_trips_data.dart';
 import '../data/user_trips_data.dart'; // FIX: Added import for userTrips
- import '../models/user_trip.dart';
+import '../models/user_trip.dart';
+import '../data/bookmark_manager.dart';
+import '../models/explore_trips.dart';
+import 'dart:io';
+import '../data/profile_image_provider.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-   final user = FirebaseAuth.instance.currentUser!;
+  final user = FirebaseAuth.instance.currentUser!;
   String get currentUserId => user.uid;
 
   List<UserTrip> _myTrips = [];
@@ -31,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadMyTrips();
+    ProfileImageProvider().loadProfileImage();
   }
 
   void _loadMyTrips() {
@@ -64,31 +70,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE6EDED),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        height: 45,
-                        child: Row(
-                          children: [
-                            const CircleAvatar(
-                              radius: 20,
-                              backgroundImage: NetworkImage(
-                                'https://wallpapers.com/images/high/dragon-ball-z-pictures-b1631prvj9jgfxi7.webp',
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                          ).then((_) {
+                             setState(() {}); // Refresh state to show updated username/pic
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6EDED),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          height: 45,
+                          child: Row(
+                            children: [
+                              // Profile Picture
+                              ValueListenableBuilder<String?>(
+                                valueListenable: ProfileImageProvider().imagePath,
+                                builder: (context, path, _) {
+                                  return CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.grey.shade300,
+                                    backgroundImage: path != null ? FileImage(File(path)) : null,
+                                    child: path == null 
+                                        ? const Icon(Icons.person, color: Colors.white, size: 20)
+                                        : null,
+                                  );
+                                }
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              username,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                              const SizedBox(width: 8),
+                              
+                              // Username (StreamBuilder for auto updates)
+                              StreamBuilder<User?>(
+                                stream: FirebaseAuth.instance.userChanges(),
+                                builder: (context, snapshot) {
+                                  final user = snapshot.data;
+                                  final displayName = (user?.displayName != null && user!.displayName!.isNotEmpty)
+                                      ? user.displayName!
+                                      : (user?.email != null ? user!.email!.split('@').first : 'Guest');
+                                  
+                                  return Text(
+                                    displayName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  );
+                                },
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const CircleAvatar(
@@ -189,9 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemBuilder: (context, index) {
                         final trip = exploreTrips[index];
                         return _destinationCard(
-                          imageUrl: trip.imageUrl,
-                          title: trip.name,
-                          location: trip.location,
+                          trip: trip,
                         );
                       },
                     ),
@@ -205,10 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-   Widget _destinationCard({
-    required String imageUrl,
-    required String title,
-    required String location,
+  Widget _destinationCard({
+    required ExploreTrip trip,
   }) {
     return Container(
       width: 190,
@@ -232,18 +264,43 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Stack(
               children: [
                 Image.network(
-                  imageUrl,
+                  trip.imageUrl,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
-                const Positioned(
+                 Positioned(
                   top: 8,
                   right: 8,
-                  child: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.bookmark_border, size: 16),
+                  child: ValueListenableBuilder<List<ExploreTrip>>(
+                    valueListenable: BookmarkManager().bookmarkedTrips,
+                    builder: (context, bookmarks, child) {
+                      final isBookmarked = BookmarkManager().isBookmarked(trip);
+                      return GestureDetector(
+                        onTap: () {
+                           if (isBookmarked) {
+                            BookmarkManager().removeBookmark(trip);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Removed from bookmarks')),
+                            );
+                          } else {
+                            BookmarkManager().addBookmark(trip);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Added to bookmarks')),
+                            );
+                          }
+                        },
+                        child: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            isBookmarked ? Icons.bookmark : Icons.bookmark_border, 
+                            size: 16,
+                            color: isBookmarked ? const Color(0xFF6A5AE0) : Colors.black,
+                          ),
+                        ),
+                      );
+                    }
                   ),
                 ),
               ],
@@ -253,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
-              title,
+              trip.name,
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
@@ -272,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    location,
+                    trip.location,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                     overflow: TextOverflow.ellipsis,
                   ),
