@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 
 // Data and Models
-import '../data/explore_trips_data.dart';
-import '../data/user_trips_data.dart';
+// Data and Models
 import '../models/user_trip.dart';
 import '../models/explore_trips.dart';
 import '../data/profile_image_provider.dart';
+import '../services/database_service.dart';
+import '../data/app_state.dart'; // import for hasUnreadNotifications
 
 // Screens
 import 'profile_screen.dart';
@@ -25,8 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final user = FirebaseAuth.instance.currentUser!;
   String get currentUserId => user.uid;
 
-  List<UserTrip> _myTrips = [];
-
   // Extract username from email
   Future<String?> userName() async {
     final String? email = FirebaseAuth.instance.currentUser?.email;
@@ -39,15 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMyTrips();
     ProfileImageProvider().loadProfileImage();
-  }
-
-  void _loadMyTrips() {
-    setState(() {
-      _myTrips =
-          userTrips.where((trip) => trip.userId == currentUserId).toList();
-    });
   }
 
   @override
@@ -69,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Top Bar ---
+                   // --- Top Bar ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -139,10 +130,106 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      const CircleAvatar(
-                        radius: 25,
-                        backgroundColor: Color(0xFFE6EDED),
-                        child: Icon(Icons.notifications_outlined),
+                      
+                      // Notification Icon with StreamBuilder
+                      StreamBuilder<List<UserTrip>>(
+                        stream: DatabaseService.getUserTrips(currentUserId),
+                        builder: (context, tripSnapshot) {
+                          final myTrips = tripSnapshot.data ?? [];
+                          // Note: For simplicity, 'hasUnreadNotifications' logic might need
+                          // to be adapted for StreamBuilder or managed via a separate Stream.
+                          // For now, we will show the red dot if ANY trips exist, 
+                          // or you can implement a local 'lastChecked' timestamp logic if preferred.
+                          // Here we simply check if list is not empty.
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              if (myTrips.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("No notification available"),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    backgroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.notifications_active, color: Colors.blue),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Text("Notifications", style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    content: SizedBox(
+                                      width: double.maxFinite,
+                                      child: ListView.separated(
+                                        shrinkWrap: true,
+                                        itemCount: myTrips.length,
+                                        separatorBuilder: (context, index) => const Divider(),
+                                        itemBuilder: (context, index) {
+                                          final trip = myTrips[index];
+                                          return ListTile(
+                                            contentPadding: EdgeInsets.zero,
+                                            leading: const Icon(Icons.flight_takeoff, color: Colors.orange),
+                                            title: Text(
+                                              trip.tripName,
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            subtitle: Text(
+                                              "Bound for ${trip.destination}",
+                                              style: const TextStyle(color: Colors.grey),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text("Close", style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            },
+                            child: Stack(
+                              children: [
+                                const CircleAvatar(
+                                  radius: 25,
+                                  backgroundColor: Color(0xFFE6EDED),
+                                  child: Icon(Icons.notifications_outlined),
+                                ),
+                                if (myTrips.isNotEmpty)
+                                  Positioned(
+                                    right: 12,
+                                    top: 12,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
                       ),
                     ],
                   ),
@@ -154,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 150,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.red[50],
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Image.asset(
@@ -175,57 +262,70 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  if (_myTrips.isEmpty)
-                    const Text(
-                      'You have no trips yet. Plan one!',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    )
-                  else
-                    ListView.builder(
-                      itemCount: _myTrips.length,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final trip = _myTrips[index];
-                        final cardColor = Colors.black87;
+                  
+                  // Replaced List with StreamBuilder
+                  StreamBuilder<List<UserTrip>>(
+                    stream: DatabaseService.getUserTrips(currentUserId),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                         return const Center(child: CircularProgressIndicator());
+                      }
+                      final myTrips = snapshot.data ?? [];
 
-                        return Card(
-                          color: cardColor.withOpacity(0.9),
-                          elevation: 6,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15)),
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ListTile(
-                              title: Text(trip.tripName,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 20,
-                                      color: Colors.white)),
-                              subtitle: Text(
-                                  '${trip.destination} (${trip.startDate} - ${trip.endDate})',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.85),
-                                      fontWeight: FontWeight.w500)),
-                              trailing: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(10)),
-                                child: Text('Travelers: ${trip.travelers}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white)),
-                              ),
-                            ),
+                      if (myTrips.isEmpty) {
+                        return const Text(
+                          'You have no trips yet. Plan one!',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
                           ),
                         );
-                      },
-                    ),
+                      }
+
+                      return ListView.builder(
+                        itemCount: myTrips.length,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final trip = myTrips[index];
+                          final cardColor = Colors.black87;
+
+                          return Card(
+                            color: cardColor.withOpacity(0.9),
+                            elevation: 6,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15)),
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: ListTile(
+                                title: Text(trip.tripName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 20,
+                                        color: Colors.white)),
+                                subtitle: Text(
+                                    '${trip.destination} (${trip.startDate} - ${trip.endDate})',
+                                    style: TextStyle(
+                                        color: Colors.white.withOpacity(0.85),
+                                        fontWeight: FontWeight.w500)),
+                                trailing: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Text('Travelers: ${trip.travelers}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
 
                   const SizedBox(height: 25),
 
@@ -233,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text(
+                       Text(
                         'Best Destination',
                         style: TextStyle(
                             fontSize: 18,
@@ -245,20 +345,33 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
 
                   SizedBox(
-                    height: 280, // Height of the horizontal scroll area
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: exploreTrips.length < 3 ? exploreTrips.length : 3,
-                      itemBuilder: (context, index) {
-                        final trip = exploreTrips[index];
+                    height: 280,
+                    // Replaced List with FutureBuilder for Explore Trips
+                    child: FutureBuilder<List<ExploreTrip>>(
+                      future: DatabaseService.getExploreTrips(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final trips = snapshot.data ?? [];
+                        
+                        // Fallback if empty (e.g. before first seed completes)
+                        if (trips.isEmpty) return const Center(child: Text("Loading destinations..."));
 
-                        // FIX: Wrap ExploreCard in a Container with WIDTH
-                        return Container(
-                          width: 200, // Important: Gives the card a fixed width
-                          margin: const EdgeInsets.only(right: 12),
-                          child: ExploreCard(trip: trip),
+                        return ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: trips.length < 3 ? trips.length : 3,
+                          itemBuilder: (context, index) {
+                            final trip = trips[index];
+
+                            return Container(
+                              width: 200,
+                              margin: const EdgeInsets.only(right: 12),
+                              child: ExploreCard(trip: trip),
+                            );
+                          },
                         );
-                      },
+                      }
                     ),
                   ),
                   const SizedBox(height: 20), // Bottom padding

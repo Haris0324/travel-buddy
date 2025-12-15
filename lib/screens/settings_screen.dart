@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/profile_image_provider.dart';
+import '../services/database_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,17 +21,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  String? _loadedPhotoUrl;
+
   @override
   void initState() {
     super.initState();
+    _loadCurrentProfile();
+  }
+
+  Future<void> _loadCurrentProfile() async {
     final user = _auth.currentUser;
     if (user != null) {
+      // 1. Pre-fill from Firebase Auth
       _usernameController.text = (user.displayName != null && user.displayName!.isNotEmpty) 
           ? user.displayName! 
           : (user.email != null ? user.email!.split('@').first : '');
+
+      // 2. Load from Realtime Database (for photo & potentially updated name)
+      final profile = await DatabaseService.getUserProfile(user.uid);
+      if (profile != null) {
+        setState(() {
+          if (profile['username'] != null) _usernameController.text = profile['username'];
+          _loadedPhotoUrl = profile['photoUrl'];
+        });
+        // Sync local provider for immediate UI feedback if needed, 
+        // but mostly we rely on _loadedPhotoUrl for this screen's source of truth now.
+        if (_loadedPhotoUrl != null) {
+          ProfileImageProvider().setProfileImage(_loadedPhotoUrl!);
+        }
+      }
     }
-    // Ensure the provider has loaded the image
-    ProfileImageProvider().loadProfileImage();
   }
 
   Future<void> _pickImage() async {
@@ -38,8 +58,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
+      // Update local provider (optional, but keeps UI snappy)
       await ProfileImageProvider().setProfileImage(image.path);
-      setState(() {}); // Rebuild to show new image
+      
+      setState(() {
+        _loadedPhotoUrl = image.path;
+      });
+
+      // SAVE TO FIREBASE
+      final user = _auth.currentUser;
+      if (user != null) {
+        await DatabaseService.saveUserProfile(user.uid, {
+          'photoUrl': image.path,
+          'username': _usernameController.text, // keep existing name
+        });
+      }
     }
   }
 
@@ -56,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         final user = _auth.currentUser;
         if (user != null) {
-          // Update Display Name
+          // Update Firebase Auth Display Name
           if (_usernameController.text.isNotEmpty && _usernameController.text != user.displayName) {
              await user.updateDisplayName(_usernameController.text);
           }
@@ -65,6 +98,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (_passwordController.text.isNotEmpty) {
             await user.updatePassword(_passwordController.text);
           }
+
+          // Update Realtime Database
+          await DatabaseService.saveUserProfile(user.uid, {
+            'username': _usernameController.text,
+            'photoUrl': _loadedPhotoUrl, // Persist current photo path
+            // Add phone if you want: 'phone': _phoneController.text
+          });
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Settings updated successfully!')),
@@ -102,18 +142,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Center(
                 child: Stack(
                   children: [
-                    ValueListenableBuilder<String?>(
-                      valueListenable: ProfileImageProvider().imagePath,
-                      builder: (context, path, child) {
-                        return CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.grey.shade200,
-                          backgroundImage: path != null ? FileImage(File(path)) : null,
-                          child: path == null 
-                              ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                              : null,
-                        );
-                      },
+                    // Display image from local state (which syncs from DB/Picker)
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: _loadedPhotoUrl != null 
+                          ? FileImage(File(_loadedPhotoUrl!)) 
+                          : null,
+                      child: _loadedPhotoUrl == null 
+                          ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                          : null,
                     ),
                     Positioned(
                       bottom: 0,

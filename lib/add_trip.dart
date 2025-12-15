@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../data/user_trips_data.dart';
 import '../models/user_trip.dart';
-import '../data/explore_trips_data.dart';
+import '../services/notification_service.dart';
+import '../services/notification_service.dart';
+import '../services/database_service.dart';
+import '../data/app_state.dart';
+import '../data/seed_data.dart'; // Import for seedExploreTrips
 
 class AddTripPage extends StatefulWidget {
   // 1. Add this optional parameter
@@ -94,7 +97,7 @@ class _AddTripPageState extends State<AddTripPage> {
     }
   }
 
-  void _submitTrip() {
+  void _submitTrip() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedTripType == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -117,8 +120,8 @@ class _AddTripPageState extends State<AddTripPage> {
       }
 
       final newUserTrip = UserTrip(
-        id: DateTime.now().toString(),
-        tripId: DateTime.now().toString(),
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tripId: DateTime.now().millisecondsSinceEpoch.toString(),
         userId: currentUserId!,
         tripName: _tripNameController.text,
         destination: _destinationController.text,
@@ -129,27 +132,45 @@ class _AddTripPageState extends State<AddTripPage> {
         tripType: _selectedTripType,
       );
 
-      userTrips.add(newUserTrip);
-      _formKey.currentState!.reset();
+      // Updated to save to Firebase
+      try {
+        await DatabaseService.saveUserTrip(currentUserId!, newUserTrip);
+        
+        // Trigger Notification
+        hasUnreadNotifications = true;
+        NotificationService.showNotification(
+          title: 'Trip Booked!',
+          body: 'You have successfully booked ${newUserTrip.tripName} to ${newUserTrip.destination}.',
+        );
 
-      _tripNameController.clear();
-      _destinationController.clear();
-      _budgetController.clear();
-      _travelersController.clear();
-      _startDateController.clear();
-      _endDateController.clear();
+        _formKey.currentState!.reset();
 
-      setState(() {
-        _selectedTripType = null;
-        _selectedDestination = null;
-      });
+        _tripNameController.clear();
+        _destinationController.clear();
+        _budgetController.clear();
+        _travelersController.clear();
+        _startDateController.clear();
+        _endDateController.clear();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Trip created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+        setState(() {
+          _selectedTripType = null;
+          _selectedDestination = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trip created successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save trip: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
 
       // Optional: Go back to previous screen after creation
       // Navigator.pop(context);
@@ -214,7 +235,7 @@ class _AddTripPageState extends State<AddTripPage> {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
                 ),
-                items: exploreTrips.map((trip) {
+                items: seedExploreTrips.map((trip) {
                   return DropdownMenuItem<String>(
                     value: trip.name,
                     child: Text(trip.name),

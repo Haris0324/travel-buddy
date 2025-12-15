@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import '../data/explore_trips_data.dart'; // Import the dummy data
 import '../models/explore_trips.dart'; // Import the new model
 import 'add_trip.dart'; // Import your AddTripPage
 import 'trip_details_page.dart';
 import 'screens/famous_cities_screen.dart'; // Import FamousCitiesScreen
-import '../data/explore_trip_cities.dart';
 import 'screens/city_map_screen.dart';
 import '../data/bookmark_manager.dart';
+import '../services/database_service.dart'; // Add service import
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -41,17 +40,31 @@ class ExplorePage extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
-         child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, // Two items per row
-            crossAxisSpacing: 16.0,
-            mainAxisSpacing: 16.0,
-            childAspectRatio: 0.70,
-          ),
-          itemCount: exploreTrips.length,
-          itemBuilder: (context, index) {
-            final trip = exploreTrips[index];
-            return ExploreCard(trip: trip);
+        child: FutureBuilder<List<ExploreTrip>>(
+          future: DatabaseService.getExploreTrips(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final trips = snapshot.data ?? [];
+            if (trips.isEmpty) {
+               return const Center(child: Text('No explore trips found.'));
+            }
+
+            return GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2, // Two items per row
+                crossAxisSpacing: 16.0,
+                mainAxisSpacing: 16.0,
+                childAspectRatio: 0.70,
+              ),
+              itemCount: trips.length,
+              itemBuilder: (context, index) {
+                final trip = trips[index];
+                return ExploreCard(trip: trip);
+              },
+            );
           },
         ),
       ),

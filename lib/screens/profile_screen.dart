@@ -1,5 +1,6 @@
 import 'dart:io';
-import '../data/profile_image_provider.dart';
+import 'dart:io';
+import 'package:travel_buddy/services/database_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:travel_buddy/screens/bookmarked_trips_screen.dart';
@@ -17,14 +18,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final user = FirebaseAuth.instance.currentUser;
   String _selectedVersion = 'Version 1.0';
   final List<String> _versions = ['Version 1.0', 'Version 1.1', 'Version 1.2', 'Beta 2.0'];
+  
+  String? _username;
+  String? _photoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    if (user != null) {
+      final profile = await DatabaseService.getUserProfile(user!.uid);
+      if (profile != null) {
+        setState(() {
+          _username = profile['username'];
+          _photoUrl = profile['photoUrl'];
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     // Determine display name and email
     final String email = user?.email ?? 'No Email';
-    final String username = (user?.displayName != null && user!.displayName!.isNotEmpty) 
-        ? user!.displayName! 
-        : (email.contains('@') ? email.split('@').first : 'Guest');
+    final String displayUsername = _username ?? (user?.displayName != null && user!.displayName!.isNotEmpty
+        ? user!.displayName!
+        : (email.contains('@') ? email.split('@').first : 'Guest'));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -47,7 +69,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              ).then((_) => setState(() {}));
+              ).then((_) {
+                 _loadUserProfile(); // Reload after editing
+                 setState(() {});
+              });
             },
           ),
         ],
@@ -59,22 +84,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 20),
 
             // --- Avatar & User Info ---
-            ValueListenableBuilder<String?>(
-              valueListenable: ProfileImageProvider().imagePath,
-              builder: (context, path, child) {
-                 return CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.blue.shade100,
-                  backgroundImage: path != null ? FileImage(File(path)) : null,
-                  child: path == null 
-                      ? const Icon(Icons.person, size: 60, color: Colors.blueAccent)
-                      : null,
-                );
-              }
+            // Use local state _photoUrl if available, else fallback to ProfileImageProvider/file
+             CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.blue.shade100,
+              backgroundImage: _photoUrl != null 
+                  ? FileImage(File(_photoUrl!)) // Assuming local path is stored for now
+                  : null, 
+              child: _photoUrl == null 
+                  ? const Icon(Icons.person, size: 60, color: Colors.blueAccent)
+                  : null,
             ),
             const SizedBox(height: 12),
             Text(
-              username,
+              displayUsername,
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             Text(
@@ -85,8 +108,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 40),
 
             // --- Menu Items ---
-            // Note: "Profile" option removed as requested ("exclude the profile option below")
-            
             ProfileMenuItem(
               icon: Icons.bookmark_outline,
               text: 'Bookmarked',
@@ -114,7 +135,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                ).then((_) => setState(() {}));
+                ).then((_) {
+                   _loadUserProfile(); // Verify sync
+                   setState(() {});
+                });
               },
             ),
             
