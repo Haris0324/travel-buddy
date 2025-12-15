@@ -1,14 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'dart:io';
+
+// Data and Models
 import '../data/explore_trips_data.dart';
 import '../data/user_trips_data.dart';
 import '../models/user_trip.dart';
-import '../landmark_screen.dart'; // Ensure this exists
 import '../models/explore_trips.dart';
-import 'dart:io';
 import '../data/profile_image_provider.dart';
+
+// Screens
 import 'profile_screen.dart';
-import '../trip_details_page.dart'; // Ensure you have this import for the navigation
+import '../trip_details_page.dart';
+import 'package:travel_buddy/explore_page.dart'; // Make sure ExploreCard is a public class in this file!
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,7 +62,6 @@ class _HomeScreenState extends State<HomeScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            // ignore: unused_local_variable
             final username = snapshot.data ?? 'Guest';
 
             return SingleChildScrollView(
@@ -145,24 +148,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
 
                   const SizedBox(height: 25),
-                  // Assuming you have this asset
-                  // Image.asset('assets/images/img_1.png'),
-                  // Replaced with a placeholder if asset is missing for safety:
+
+                  // --- Hero Image ---
                   Container(
                     height: 150,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.blue[50],
+                      color: Colors.red[50],
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Image.asset(
-                        'assets/images/img_1.png',
-                          fit: BoxFit.cover
+                        'assets/images/img.png',
+                        width: 100,
+                        fit: BoxFit.contain
                     ),
                   ),
                   const SizedBox(height: 25),
 
-                  //  Upcoming Trips Section
+                  // --- Upcoming Trips Section ---
                   const Text(
                     'Upcoming Trips',
                     style: TextStyle(
@@ -240,152 +243,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
+
                   SizedBox(
-                    // FIXED: Increased height to 300 to prevent overflow
-                    height: 300,
+                    height: 280, // Height of the horizontal scroll area
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      // Safety check for length
                       itemCount: exploreTrips.length < 3 ? exploreTrips.length : 3,
                       itemBuilder: (context, index) {
                         final trip = exploreTrips[index];
-                        return _destinationCard(trip: trip);
+
+                        // FIX: Wrap ExploreCard in a Container with WIDTH
+                        return Container(
+                          width: 200, // Important: Gives the card a fixed width
+                          margin: const EdgeInsets.only(right: 12),
+                          child: ExploreCard(trip: trip),
+                        );
                       },
                     ),
                   ),
+                  const SizedBox(height: 20), // Bottom padding
                 ],
               ),
             );
           },
         ),
-      ),
-    );
-  }
-
-  // FIXED: Corrected the function signature and implementation
-  Widget _destinationCard({required ExploreTrip trip}) {
-    return Container(
-      width: 190,
-      margin: const EdgeInsets.only(right: 16, bottom: 10), // Added bottom margin for shadow
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Image Section
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: Stack(
-              children: [
-                Image.network(
-                  trip.imageUrl,
-                  height: 120, // FIXED: Reduced height slightly to fit text below
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 120,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.image_not_supported),
-                  ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.bookmark_border,
-                      size: 20,
-                      color: Color(0xFF6A5AE0),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 2. Text Content (The snippet you provided)
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, // Important for layout
-              children: [
-                // Trip Name
-                Text(
-                  trip.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.black87,
-                  ),
-                  maxLines: 1, // Limit lines to prevent overflow
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-
-                // Location
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        trip.location,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Details Button
-                // Using a smaller visual footprint to avoid overflow
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero, // Remove default padding
-                      alignment: Alignment.centerLeft,
-                      minimumSize: const Size(50, 30), // Smaller touch target
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TripDetailPage(trip: trip),
-                        ),
-                      );
-                    },
-                    child: const Text("Details"),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
