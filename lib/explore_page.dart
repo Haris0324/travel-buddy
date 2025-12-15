@@ -3,6 +3,10 @@ import '../data/explore_trips_data.dart'; // Import the dummy data
 import '../models/explore_trips.dart'; // Import the new model
 import 'add_trip.dart'; // Import your AddTripPage
 import 'trip_details_page.dart';
+import 'screens/famous_cities_screen.dart'; // Import FamousCitiesScreen
+import '../data/explore_trip_cities.dart';
+import 'screens/city_map_screen.dart';
+import '../data/bookmark_manager.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -13,6 +17,16 @@ class ExplorePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Explore Trips'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.location_city),
+            tooltip: 'Famous Cities',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FamousCitiesScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
@@ -95,17 +109,38 @@ class ExploreCard extends StatelessWidget {
                  Positioned(
                   top: 10,
                   right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.bookmark_border,
-                      size: 20,
-                      color: Color(0xFF6A5AE0),
-                    ),
+                  child: ValueListenableBuilder(
+                    valueListenable: BookmarkManager().bookmarkedTrips,
+                    builder: (context, bookmarks, child) {
+                      final isBookmarked = BookmarkManager().isBookmarked(trip);
+                      return GestureDetector(
+                         onTap: () {
+                          if (isBookmarked) {
+                            BookmarkManager().removeBookmark(trip);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Removed from bookmarks')),
+                            );
+                          } else {
+                            BookmarkManager().addBookmark(trip);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Added to bookmarks')),
+                            );
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                            size: 20,
+                            color: const Color(0xFF6A5AE0),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -149,12 +184,10 @@ class ExploreCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-
                     ],
                   ),
-
-                ]
-            ),
+                ],
+              ),
             ),
           ],
         ),
